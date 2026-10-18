@@ -80,6 +80,10 @@ char serialBuffer[SERIAL_BUF_SIZE];
 byte bufferIndex = 0;
 bool receivingPacket = false;
 
+// Forward declarations
+void readSimHubSerial();
+void parseSimHubPacket(char* buf);
+
 // ------------------------------------------------------------------------------
 // Setup Routine
 // ------------------------------------------------------------------------------

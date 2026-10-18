@@ -2,6 +2,7 @@
  * ==============================================================================
  * Aston Martin DB9 / V8 Vantage (Volvo PAG Platform) CAN Bus Definitions
  * Header File: Aston_Martin_DB9_CAN_Defs.h
+ * Target: Arduino Mega 2560 + Seeed Studio CAN-BUS Shield (CS Pin 10)
  * ==============================================================================
  */
 
