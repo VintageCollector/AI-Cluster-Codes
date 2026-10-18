@@ -1,0 +1,9 @@
+{
+  "DeviceName": "Aston Martin DB9 Cluster Bridge (Volvo PAG / Mega 2560)",
+  "PortName": "COM3",
+  "BaudRate": 115200,
+  "ConnectionMessage": "<S;0;0;N;24;90;95;0;0;0;0;0;0;0;1;0;0;2>\\n",
+  "DisconnectionMessage": "<S;0;0;N;0;0;0;0;0;0;0;0;0;0;0;0;0;0>\\n",
+  "UpdateInterval": 20,
+  "UpdateMessageNCalc": "format('<S;{0};{1};{2};{3};{4};{5};{6};{7};{8};{9};{10};{11};{12};{13};{14};{15};{16}>\\n', round([SpeedKmh], 1), round([Rpms]), isnull([Gear], 'N'), round(isnull([Fuel_LitersPer100Km], 24), 1), round(isnull([EngineWaterTemperature], 90)), round(isnull([OilTemperature], 95)), [GameRawData.Lights_LowBeam] ? 1 : 0, [GameRawData.Lights_HighBeam] ? 1 : 0, [GameRawData.Lights_FogFront] ? 1 : 0, [GameRawData.Lights_FogRear] ? 1 : 0, ([EngineWaterTemperatureWarning] || [OilPressureWarning] || [EngineIgnitionOn] == 0) ? 1 : 0, [ABSActive] ? 1 : 0, [TCActive] ? 1 : 0, [Handbrake] ? 1 : 0, [TurnIndicatorLeft] ? 1 : 0, [TurnIndicatorRight] ? 1 : 0, [EngineIgnitionOn] ? 2 : 1)"
+}
