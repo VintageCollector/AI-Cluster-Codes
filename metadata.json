@@ -1,6 +1,6 @@
 {
-  "name": "E90 CAN Bridge",
-  "description": "Arduino code to control and display BMW E90 cluster data via CAN bus communication.",
+  "name": "Aston Martin DB9 CAN Bridge",
+  "description": "Arduino code to control and display Aston Martin DB9 cluster data via Volvo PAG CAN bus communication.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
