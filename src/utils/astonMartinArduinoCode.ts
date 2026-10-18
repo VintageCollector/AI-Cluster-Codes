@@ -3,12 +3,12 @@ import { ArduinoHardwareConfig } from '../types/simhub';
 export function generateAstonMartinArduinoSketch(config: ArduinoHardwareConfig): string {
   const clockConstant = config.mcpClock === '8MHz' ? 'MCP_8MHZ' : 'MCP_16MHZ';
   const baudConstant = config.canSpeed === '500kbps' ? 'CAN_500KBPS' : 'CAN_125KBPS';
-  const baudLabel = config.canSpeed === '500kbps' ? '500 kbps (HS-CAN / Powertrain)' : '125 kbps (MS-CAN / Volvo Interior Network)';
 
   return `/*
  * ==============================================================================
  * Aston Martin DB9 & V8 Vantage (Volvo PAG Platform) <--> SimHub Serial Bridge
  * Hardware: Arduino Mega 2560 + Seeed Studio CAN-BUS Shield (CS Pin 10)
+ * Format: Arduino IDE Native (.ino) - Only .ino and .h files required!
  *
  * Vehicle Platform Details:
  *   - Vehicle Model: Aston Martin DB9 / V8 Vantage / DBS (2004 - 2016)
@@ -16,8 +16,7 @@ export function generateAstonMartinArduinoSketch(config: ArduinoHardwareConfig):
  *   - Central Electronic Module (CEM): Volvo P1-derived CEM architecture
  *   - Driver Information Module (DIM): Dual digital OLED/dot-matrix screens
  *   - Tachometer Signature: Counter-Clockwise (Anti-Clockwise) sweep!
- *   - CAN Bus Protocol: Volvo / Ford PAG Standard 11-bit & 29-bit CAN
- *   - Interior CAN Speed: 125 kbps (MS-CAN) or 500 kbps (HS-CAN)
+ *   - CAN Bus Protocol: Volvo / Ford PAG Standard 11-bit CAN (125 kbps MS-CAN)
  *
  * HARDWARE WIRING (Seeed CAN-BUS Shield on Arduino Mega 2560):
  *   - CS Pin : Pin ${config.csPin}
@@ -30,13 +29,21 @@ export function generateAstonMartinArduinoSketch(config: ArduinoHardwareConfig):
  *   - Pin 10 : CAN High (CAN_H) -> Connect to Seeed Shield CANH
  *   - Pin 11 : CAN Low (CAN_L)  -> Connect to Seeed Shield CANL
  *
- * SIMHUB SERIAL PACKET FORMAT:
- *   <S;speed;rpm;gear;mpg;waterTemp;oilTemp;low;high;fogF;fogR;cel;abs;tc;brake;turnL;turnR;ign>
+ * SKETCH TABS (Supported directly in Arduino IDE):
+ *   1. Aston_Martin_DB9_SimHub_Bridge.ino  (Main application logic)
+ *   2. Aston_Martin_DB9_CAN_Defs.h         (Volvo PAG CAN arbitration IDs & bitmasks)
+ *   3. Aston_Martin_DB9_SimHub_Config.h    (SimHub baud rate, NCalc formulas, protocol format)
  * ==============================================================================
  */
 
 #include <SPI.h>
 #include <mcp_can.h>
+
+// ------------------------------------------------------------------------------
+// Arduino IDE Native Header Tabs (.h)
+// ------------------------------------------------------------------------------
+#include "Aston_Martin_DB9_CAN_Defs.h"
+#include "Aston_Martin_DB9_SimHub_Config.h"
 
 // ------------------------------------------------------------------------------
 // Hardware Pin Definitions for Seeed Studio CAN-BUS Shield
@@ -87,24 +94,29 @@ char serialBuffer[SERIAL_BUF_SIZE];
 byte bufferIndex = 0;
 bool receivingPacket = false;
 
+// Forward declarations
+void readSimHubSerial();
+void parseSimHubPacket(char* buf);
+
 // ------------------------------------------------------------------------------
 // Setup Routine
 // ------------------------------------------------------------------------------
 void setup() {
-  Serial.begin(${config.baudRate});
+  Serial.begin(SIMHUB_SERIAL_BAUD_RATE);
   while (!Serial && millis() < 3000);
 
   Serial.println(F("============================================="));
   Serial.println(F("ASTON MARTIN DB9 (VOLVO PAG) CLUSTER BRIDGE"));
   Serial.println(F("Target: Arduino Mega + Seeed CAN Shield (CS: 10)"));
   Serial.println(F("Baud: 125 kbps (MS-CAN) / 16 MHz Crystal"));
+  Serial.println(F("Format: Pure Arduino IDE (.ino + .h only)"));
   Serial.println(F("============================================="));
 
   // Initialize MCP2515 CAN Controller
   // Aston Martin / Volvo interior cluster connects via MS-CAN (125 kbps)
-  // or HS-CAN (500 kbps). Seeed Studio shield uses a 16MHz crystal (MCP_16MHZ).
+  // Seeed Studio shield uses a 16MHz crystal (MCP_16MHZ).
   if (CAN0.begin(MCP_ANY, ${baudConstant}, ${clockConstant}) == CAN_OK) {
-    Serial.println(F("SEEED CAN-BUS SHIELD INITIALIZED OK!"));
+    Serial.println(F("SEEED CAN-BUS SHIELD INITIALIZED OK (125 KBPS)!"));
   } else {
     Serial.println(F("CAN INIT FAILED!"));
     Serial.println(F("Verify Seeed shield is firmly plugged into Mega ICSP header."));
@@ -132,7 +144,7 @@ void loop() {
   }
 
   // --------------------------------------------------------------------------
-  // 1. CAN ID 0x020 / 0x060 - Volvo/Aston Martin CEM Ignition & Wakeup [100ms]
+  // 1. CAN ID 0x020 - Volvo/Aston Martin CEM Ignition & Wakeup [100ms]
   // Drives the startup sequence and "POWER, BEAUTY, SOUL" splash on DIM OLED!
   // --------------------------------------------------------------------------
   if (currentMillis - lastTimeCEM >= 100) {
@@ -155,7 +167,7 @@ void loop() {
     } else {
       frameCEM[0] = 0x00; // Position 0 (Sleep / Key out)
     }
-    CAN0.sendMsgBuf(0x020, 0, 8, frameCEM);
+    CAN0.sendMsgBuf(CAN_ID_CEM_IGNITION, 0, 8, frameCEM);
   }
 
   if (simIgnition == 0) return; // Sleep mode
@@ -181,70 +193,74 @@ void loop() {
       0x00,                         // Byte 6: Rolling counter
       0x80                          // Byte 7: Checksum
     };
-    CAN0.sendMsgBuf(0x201, 0, 8, frame201);
+    CAN0.sendMsgBuf(CAN_ID_ECM_ENGINE, 0, 8, frame201);
   }
 
   // --------------------------------------------------------------------------
-  // 3. CAN ID 0x420 - Vehicle Speed & Odometer (ABS / BCM) [20ms - 50 Hz]
-  // Formula: Raw = Speed_kmh * 100.0 (or * 16.0 depending on cluster firmware)
+  // 3. CAN ID 0x420 - Vehicle Speed (ABS / BCM Wheel Speed Sensors) [20ms - 50 Hz]
+  // Aston Martin DB9 Speedometer Scale: 0 - 330 km/h (200+ mph)
+  // Formula: Raw = Speed_kmh * 100.0  =>  km/h = Raw / 100.0
   // --------------------------------------------------------------------------
   if (currentMillis - lastTimeSpeed >= 20) {
     lastTimeSpeed = currentMillis;
 
-    unsigned int rawSpeed = (unsigned int)(constrain(simSpeed, 0.0, 330.0) * 100.0);
+    unsigned int rawSpeed = (unsigned int)(constrain(simSpeed, 0.0, 340.0) * 100.0);
 
     byte frame420[8] = {
-      (byte)((rawSpeed >> 8) & 0xFF), // Speed MSB
-      (byte)(rawSpeed & 0xFF),        // Speed LSB
-      0x00, 0x00,                     // Distance / Pulse
-      0x00, 0x00, 0x00, 0x00
+      (byte)((rawSpeed >> 8) & 0xFF), // Byte 0: Speed MSB
+      (byte)(rawSpeed & 0xFF),        // Byte 1: Speed LSB
+      (byte)((rawSpeed >> 8) & 0xFF), // Byte 2: Wheel ref speed
+      (byte)(rawSpeed & 0xFF),        // Byte 3: Wheel ref speed
+      0x00,                           // Byte 4: Distance counter
+      0x00,                           // Byte 5: Distance counter
+      0x02,                           // Byte 6: Validity status flag (0x02 = Valid)
+      0x00                            // Byte 7: Checksum
     };
-    CAN0.sendMsgBuf(0x420, 0, 8, frame420);
+    CAN0.sendMsgBuf(CAN_ID_ABS_SPEED, 0, 8, frame420);
   }
 
   // --------------------------------------------------------------------------
-  // 4. CAN ID 0x212 - Lighting & Telltales (CEM / Switch Module) [100ms]
-  // Headlights, High Beam, Front/Rear Fogs, and Turn Signal Arrows
+  // 4. CAN ID 0x212 - Lighting & Indicators [100ms]
   // --------------------------------------------------------------------------
   if (currentMillis - lastTimeLights >= 100) {
     lastTimeLights = currentMillis;
 
-    byte lightByte1 = 0x00;
-    if (simLowBeam)   lightByte1 |= 0x01 | 0x04; // Low beam + Position lamps
-    if (simHighBeam)  lightByte1 |= 0x02;        // High beam (Blue telltale)
-    if (simFogFront)  lightByte1 |= 0x10;        // Front Fog Lamps (Green)
-    if (simFogRear)   lightByte1 |= 0x20;        // Rear Fog Lamp (Amber)
+    byte lightByte = 0x00;
+    if (simLowBeam)  lightByte |= AM_LIGHT_LOW_BEAM;
+    if (simHighBeam) lightByte |= AM_LIGHT_HIGH_BEAM;
+    if (simFogFront) lightByte |= AM_LIGHT_FOG_FRONT;
+    if (simFogRear)  lightByte |= AM_LIGHT_FOG_REAR;
 
-    byte lightByte2 = 0x00;
-    if (simTurnL) lightByte2 |= 0x01; // Left Blinker
-    if (simTurnR) lightByte2 |= 0x02; // Right Blinker
+    byte turnByte = 0x00;
+    if (simTurnL) turnByte |= AM_TURN_LEFT;
+    if (simTurnR) turnByte |= AM_TURN_RIGHT;
 
     byte frame212[8] = {
-      lightByte1,
-      lightByte2,
-      (byte)constrain(backlightLevel, 0, 255), // Dial illumination intensity
+      lightByte,                   // Byte 0: Main exterior lights
+      turnByte,                    // Byte 1: Turn signals
+      (byte)backlightLevel,        // Byte 2: Dial backlight brightness (0-255)
       0x00, 0x00, 0x00, 0x00, 0x00
     };
-    CAN0.sendMsgBuf(0x212, 0, 8, frame212);
+    CAN0.sendMsgBuf(CAN_ID_LIGHTS_STATUS, 0, 8, frame212);
   }
 
   // --------------------------------------------------------------------------
-  // 5. CAN ID 0x320 - Brake & Stability Control (ABS, DSC, Handbrake) [50ms]
+  // 5. CAN ID 0x320 - DSC / Traction Control & Handbrake [50ms]
   // --------------------------------------------------------------------------
   if (currentMillis - lastTimeBrakes >= 50) {
     lastTimeBrakes = currentMillis;
 
     byte brakeByte = 0x00;
-    if (simHandbrake) brakeByte |= 0x01; // Red Brake (!)
-    if (simAbs)       brakeByte |= 0x02; // Amber ABS
-    if (simTc)        brakeByte |= 0x04; // Amber DSC / Traction
+    if (simHandbrake) brakeByte |= AM_BRAKE_HANDBRAKE;
+    if (simAbs)       brakeByte |= AM_BRAKE_ABS_FAULT;
+    if (simTc)        brakeByte |= AM_BRAKE_DSC_ACTIVE;
 
     byte frame320[8] = {
       brakeByte,
       (byte)(simTc ? 0x02 : 0x00),
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
-    CAN0.sendMsgBuf(0x320, 0, 8, frame320);
+    CAN0.sendMsgBuf(CAN_ID_BRAKE_STABILITY, 0, 8, frame320);
   }
 
   // --------------------------------------------------------------------------
@@ -262,7 +278,7 @@ void loop() {
       0x50,     // Fuel Level (50%)
       0x00, 0x00, 0x00, 0x00, 0x00
     };
-    CAN0.sendMsgBuf(0x410, 0, 8, frame410);
+    CAN0.sendMsgBuf(CAN_ID_TEMPERATURES, 0, 8, frame410);
   }
 }
 
@@ -273,10 +289,10 @@ void readSimHubSerial() {
   while (Serial.available() > 0) {
     char c = Serial.read();
 
-    if (c == '<') {
+    if (c == SIMHUB_PACKET_START_CHAR) {
       bufferIndex = 0;
       receivingPacket = true;
-    } else if (c == '>' && receivingPacket) {
+    } else if (c == SIMHUB_PACKET_END_CHAR && receivingPacket) {
       serialBuffer[bufferIndex] = '\\0';
       receivingPacket = false;
       parseSimHubPacket(serialBuffer);
@@ -296,30 +312,30 @@ void readSimHubSerial() {
 // Tokenizer / Parser
 // ------------------------------------------------------------------------------
 void parseSimHubPacket(char* buf) {
-  if (buf[0] != 'S') return;
+  if (buf[0] != SIMHUB_PACKET_COMMAND_CHAR) return;
 
   char* token = strtok(buf, ";");
   int tokenIndex = 0;
 
   while ((token = strtok(NULL, ";")) != NULL) {
     switch (tokenIndex) {
-      case 0:  simSpeed       = atof(token); break;
-      case 1:  simRpm         = atof(token); break;
-      case 2:  strncpy(simGear, token, 3);   break;
-      case 3:  simMpg         = atof(token); break;
-      case 4:  simWaterTemp   = atoi(token); break;
-      case 5:  simOilTemp     = atoi(token); break;
-      case 6:  simLowBeam     = (atoi(token) != 0); break;
-      case 7:  simHighBeam    = (atoi(token) != 0); break;
-      case 8:  simFogFront    = (atoi(token) != 0); break;
-      case 9:  simFogRear     = (atoi(token) != 0); break;
-      case 10: simCheckEngine = (atoi(token) != 0); break;
-      case 11: simAbs         = (atoi(token) != 0); break;
-      case 12: simTc          = (atoi(token) != 0); break;
-      case 13: simHandbrake   = (atoi(token) != 0); break;
-      case 14: simTurnL       = (atoi(token) != 0); break;
-      case 15: simTurnR       = (atoi(token) != 0); break;
-      case 16: simIgnition    = (byte)atoi(token); break;
+      case FIELD_SPEED_KMH:        simSpeed       = atof(token); break;
+      case FIELD_ENGINE_RPM:       simRpm         = atof(token); break;
+      case FIELD_CURRENT_GEAR:     strncpy(simGear, token, 3);   break;
+      case FIELD_CONSUMPTION_L100: simMpg         = atof(token); break;
+      case FIELD_WATER_TEMP_C:     simWaterTemp   = atoi(token); break;
+      case FIELD_OIL_TEMP_C:       simOilTemp     = atoi(token); break;
+      case FIELD_LIGHT_LOW_BEAM:   simLowBeam     = (atoi(token) != 0); break;
+      case FIELD_LIGHT_HIGH_BEAM:  simHighBeam    = (atoi(token) != 0); break;
+      case FIELD_LIGHT_FOG_FRONT:  simFogFront    = (atoi(token) != 0); break;
+      case FIELD_LIGHT_FOG_REAR:   simFogRear     = (atoi(token) != 0); break;
+      case FIELD_WARN_ENGINE_CEL:  simCheckEngine = (atoi(token) != 0); break;
+      case FIELD_WARN_ABS:         simAbs         = (atoi(token) != 0); break;
+      case FIELD_WARN_TRACTION:    simTc          = (atoi(token) != 0); break;
+      case FIELD_WARN_HANDBRAKE:   simHandbrake   = (atoi(token) != 0); break;
+      case FIELD_TURN_LEFT:        simTurnL       = (atoi(token) != 0); break;
+      case FIELD_TURN_RIGHT:       simTurnR       = (atoi(token) != 0); break;
+      case FIELD_IGNITION_STATE:   simIgnition    = (byte)atoi(token); break;
     }
     tokenIndex++;
   }

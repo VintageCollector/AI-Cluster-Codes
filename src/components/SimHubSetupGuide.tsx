@@ -7,9 +7,10 @@ import {
   Download, 
   CheckCircle2, 
   AlertTriangle, 
-  FileJson,
+  FileCode,
   Layers,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SimHubSetupGuideProps {
@@ -67,26 +68,13 @@ export const SimHubSetupGuide: React.FC<SimHubSetupGuideProps> = ({ config }) =>
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDownloadProfile = () => {
-    const profile = {
-      DeviceName: "Aston Martin DB9 Cluster Bridge (Volvo PAG / Mega 2560)",
-      PortName: "COM3",
-      BaudRate: config.baudRate,
-      ConnectionMessage: connectMsg,
-      DisconnectionMessage: disconnectMsg,
-      UpdateInterval: 20,
-      UpdateMessageNCalc: ncalcExpression
-    };
-    const jsonStr = JSON.stringify(profile, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+  const handleDownloadHeader = () => {
     const link = document.createElement('a');
-    link.href = url;
-    link.download = 'SimHub_Aston_Martin_DB9_Profile.json';
+    link.href = '/Aston_Martin_DB9_SimHub_Config.h';
+    link.download = 'Aston_Martin_DB9_SimHub_Config.h';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -97,22 +85,33 @@ export const SimHubSetupGuide: React.FC<SimHubSetupGuideProps> = ({ config }) =>
           <div className="flex items-center gap-2">
             <Gamepad2 className="w-5 h-5 text-sky-400" />
             <div>
-              <h3 className="text-sm font-bold text-zinc-100">
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                 SimHub Custom Serial Device Integration Guide
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  Pure .ino + .h Format
+                </span>
               </h3>
               <p className="text-xs text-zinc-400">
-                Configure SimHub to stream live telemetry to your Arduino Mega 2560 &amp; Aston Martin DB9 cluster
+                Directly compatible with Arduino IDE — no unsupported files (.json, etc.).
               </p>
             </div>
           </div>
 
           <button
-            onClick={handleDownloadProfile}
+            onClick={handleDownloadHeader}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 active:scale-95 text-white shadow-md transition-all"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Download SimHub Profile JSON</span>
+            <span>Download Aston_Martin_DB9_SimHub_Config.h</span>
           </button>
+        </div>
+
+        {/* Arduino IDE Compatibility Badge */}
+        <div className="mb-4 p-3 bg-emerald-950/30 border border-emerald-800/40 rounded-lg flex items-center gap-2.5 text-xs text-emerald-200">
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>
+            <strong>100% Arduino IDE Native:</strong> All SimHub protocol definitions and expressions are stored in <code className="font-mono text-emerald-300 bg-emerald-900/40 px-1 py-0.5 rounded">.h</code> header tabs alongside your <code className="font-mono text-emerald-300 bg-emerald-900/40 px-1 py-0.5 rounded">.ino</code> sketch file.
+          </span>
         </div>
 
         {/* 4-Step Setup Walkthrough */}
@@ -121,7 +120,7 @@ export const SimHubSetupGuide: React.FC<SimHubSetupGuideProps> = ({ config }) =>
             <div className="w-6 h-6 rounded-full bg-sky-600 text-white font-bold flex items-center justify-center text-xs">1</div>
             <h4 className="font-bold text-zinc-200 text-xs">Flash Arduino Mega</h4>
             <p className="text-zinc-400 text-[11px] leading-relaxed">
-              Upload the generated <code className="text-sky-400 font-mono">Aston_Martin_DB9_SimHub_Bridge.ino</code> to your Arduino Mega 2560 using the Arduino IDE. Close the Arduino Serial Monitor once flashed.
+              Open the sketch folder containing <code className="text-sky-400 font-mono">.ino</code> and <code className="text-sky-400 font-mono">.h</code> files in Arduino IDE, select <strong>Arduino Mega 2560</strong>, and click <strong>Upload</strong>.
             </p>
           </div>
 
@@ -171,7 +170,7 @@ export const SimHubSetupGuide: React.FC<SimHubSetupGuideProps> = ({ config }) =>
             {connectMsg}
           </pre>
           <p className="text-[11px] text-zinc-500">
-            Transmitted once when SimHub connects to COM port. Commands the Aston Martin cluster to wake up and display "POWER, BEAUTY, SOUL".
+            Transmitted once when SimHub connects to COM port. Commands the Aston Martin cluster to wake up and display "POWER, BEAUTY, SOUL". Defined in <code className="font-mono text-zinc-300">SIMHUB_CONNECT_MESSAGE</code> in <code className="font-mono text-sky-400">Aston_Martin_DB9_SimHub_Config.h</code>.
           </p>
         </div>
 
@@ -193,7 +192,7 @@ export const SimHubSetupGuide: React.FC<SimHubSetupGuideProps> = ({ config }) =>
             {disconnectMsg}
           </pre>
           <p className="text-[11px] text-zinc-500">
-            Transmitted when SimHub closes. Commands the Aston Martin cluster into deep sleep.
+            Transmitted when SimHub closes. Commands the Aston Martin cluster into deep sleep. Defined in <code className="font-mono text-zinc-300">SIMHUB_DISCONNECT_MESSAGE</code>.
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SimHubPacket, ArduinoHardwareConfig } from './types/simhub';
 import { generateAstonMartinArduinoSketch } from './utils/astonMartinArduinoCode';
+import { CAN_DEFS_HEADER_CODE, SIMHUB_CONFIG_HEADER_CODE } from './utils/arduinoFiles';
 import { AstonMartinClusterSimulator } from './components/AstonMartinClusterSimulator';
 import { SimHubSetupGuide } from './components/SimHubSetupGuide';
 import { 
@@ -15,14 +16,16 @@ import {
   Activity,
   Layers,
   FileCode,
-  FileJson,
   PackageCheck,
   CheckCircle2,
-  Sliders
+  Sliders,
+  ShieldCheck,
+  FolderArchive
 } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'code' | 'simulator' | 'simhub_guide' | 'wiring'>('code');
+  const [activeCodeFile, setActiveCodeFile] = useState<'ino' | 'can_defs' | 'simhub_config'>('ino');
   const [units, setUnits] = useState<'us' | 'metric'>('us');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -59,18 +62,36 @@ export default function App() {
 
   const sketchCode = generateAstonMartinArduinoSketch(hardwareConfig);
   const inoFilename = 'Aston_Martin_DB9_SimHub_Bridge.ino';
+  const canDefsFilename = 'Aston_Martin_DB9_CAN_Defs.h';
+  const simhubConfigFilename = 'Aston_Martin_DB9_SimHub_Config.h';
+
+  const getCurrentFileContent = () => {
+    switch (activeCodeFile) {
+      case 'ino': return sketchCode;
+      case 'can_defs': return CAN_DEFS_HEADER_CODE;
+      case 'simhub_config': return SIMHUB_CONFIG_HEADER_CODE;
+    }
+  };
+
+  const getCurrentFileName = () => {
+    switch (activeCodeFile) {
+      case 'ino': return inoFilename;
+      case 'can_defs': return canDefsFilename;
+      case 'simhub_config': return simhubConfigFilename;
+    }
+  };
 
   const handleUpdatePacket = (partial: Partial<SimHubPacket>) => {
     setPacket(prev => ({ ...prev, ...partial }));
   };
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(sketchCode);
+  const handleCopyCurrentCode = () => {
+    navigator.clipboard.writeText(getCurrentFileContent());
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const triggerDownload = (filename: string, content: string, mime: string) => {
+  const triggerDownload = (filename: string, content: string, mime: string = 'text/plain;charset=utf-8') => {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -82,8 +103,14 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadIno = () => {
-    triggerDownload(inoFilename, sketchCode, 'text/plain;charset=utf-8');
+  const handleDownloadCurrentFile = () => {
+    triggerDownload(getCurrentFileName(), getCurrentFileContent());
+  };
+
+  const handleDownloadAll = () => {
+    triggerDownload(inoFilename, sketchCode);
+    setTimeout(() => triggerDownload(canDefsFilename, CAN_DEFS_HEADER_CODE), 300);
+    setTimeout(() => triggerDownload(simhubConfigFilename, SIMHUB_CONFIG_HEADER_CODE), 600);
   };
 
   return (
@@ -109,6 +136,9 @@ export default function App() {
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-sky-300 border border-zinc-700">
                   Seeed Shield (CS: 10)
                 </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 hidden sm:inline-block">
+                  Pure .ino + .h
+                </span>
               </div>
               <p className="text-[11px] text-zinc-400 hidden sm:block">
                 Volvo PAG Platform Architecture &bull; Anti-Clockwise Tachometer &bull; Arduino Mega 2560
@@ -118,11 +148,11 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleDownloadIno}
+              onClick={handleDownloadAll}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-md active:scale-95 transition-all"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download .ino Sketch</span>
+              <span>Download All (.ino + .h)</span>
             </button>
           </div>
         </div>
@@ -138,7 +168,7 @@ export default function App() {
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>Arduino Mega Code (.ino)</span>
+            <span>Arduino Mega Files (.ino + .h)</span>
           </button>
 
           <button
@@ -185,7 +215,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <PackageCheck className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="text-xs font-semibold text-zinc-200">
-              Aston Martin DB9 Files Ready for Flashing:
+              Arduino IDE Ready Files (Strictly .ino and .h only):
             </span>
           </div>
 
@@ -200,21 +230,21 @@ export default function App() {
             </a>
 
             <a
-              href="/SimHub_Aston_Martin_DB9_Profile.json"
-              download="SimHub_Aston_Martin_DB9_Profile.json"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 transition-all shadow-sm"
+              href="/Aston_Martin_DB9_CAN_Defs.h"
+              download="Aston_Martin_DB9_CAN_Defs.h"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-teal-300 border border-zinc-700 transition-all shadow-sm"
             >
-              <FileJson className="w-3.5 h-3.5" />
-              <span>SimHub_Aston_Martin_DB9_Profile.json</span>
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Aston_Martin_DB9_CAN_Defs.h</span>
             </a>
 
             <a
-              href="/Aston_Martin_DB9_CAN_Defs.h"
-              download="Aston_Martin_DB9_CAN_Defs.h"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-all shadow-sm"
+              href="/Aston_Martin_DB9_SimHub_Config.h"
+              download="Aston_Martin_DB9_SimHub_Config.h"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700 transition-all shadow-sm"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Aston_Martin_DB9_CAN_Defs.h</span>
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Aston_Martin_DB9_SimHub_Config.h</span>
             </a>
           </div>
         </div>
@@ -227,43 +257,105 @@ export default function App() {
           <div className="space-y-6">
             {/* Architecture Overview */}
             <div className="p-4 bg-sky-950/25 border border-sky-800/40 rounded-xl space-y-2 text-xs text-zinc-300">
-              <span className="font-bold text-sky-300 text-sm block">
-                Aston Martin DB9 &amp; Volvo PAG Platform Technical Summary:
-              </span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-sky-300 text-sm block">
+                  Aston Martin DB9 &amp; Volvo PAG Platform Technical Summary:
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                  <ShieldCheck className="w-4 h-4" />
+                  Format: .ino &amp; .h files only (Arduino IDE 1.8.x &amp; 2.x native)
+                </span>
+              </div>
               <p className="leading-relaxed">
-                During the Ford PAG era, the Aston Martin DB9, DBS, and V8 Vantage shared their Central Electronic Module (CEM) and Driver Information Module (DIM) network with the <strong>Volvo P1/P2 platform</strong>. This clean sketch communicates using Volvo CAN frames (<strong>0x020 CEM Wakeup</strong>, <strong>0x201 RPM</strong>, <strong>0x420 Speed</strong>, <strong>0x212 Lights</strong>, and <strong>0x320 Stability/Brakes</strong>). It is pre-configured for the <strong>Seeed Studio CAN-BUS Shield on CS Pin 10 with a 16 MHz crystal</strong>.
+                During the Ford PAG era, the Aston Martin DB9, DBS, and V8 Vantage shared their Central Electronic Module (CEM) and Driver Information Module (DIM) network with the <strong>Volvo P1/P2 platform</strong>. This clean sketch communicates using Volvo CAN frames (<strong>0x020 CEM Wakeup</strong>, <strong>0x201 RPM</strong>, <strong>0x420 Speed</strong>, <strong>0x212 Lights</strong>, and <strong>0x320 Stability/Brakes</strong>). It is pre-configured for the <strong>Seeed Studio CAN-BUS Shield on CS Pin 10 with a 16 MHz crystal</strong> on an <strong>Arduino Mega 2560</strong>.
               </p>
             </div>
 
-            {/* Code Box */}
+            {/* Code Box with Arduino IDE-Style Tabs */}
             <div className="bg-zinc-900/90 rounded-xl border border-zinc-800 shadow-md overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950 px-4 py-3 border-b border-zinc-800">
-                <span className="font-mono text-xs font-bold text-sky-400">
-                  {inoFilename} &bull; Seeed Shield (CS: 10, 16MHz)
-                </span>
-
-                <div className="flex items-center gap-2">
+              {/* Arduino IDE Tab Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950 px-4 pt-3 border-b border-zinc-800">
+                <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
                   <button
-                    onClick={handleCopyCode}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-all"
+                    onClick={() => setActiveCodeFile('ino')}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-xs font-mono font-semibold transition-all border-t border-l border-r ${
+                      activeCodeFile === 'ino'
+                        ? 'bg-zinc-900 text-sky-400 border-zinc-700'
+                        : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border-transparent hover:bg-zinc-900/50'
+                    }`}
                   >
-                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                    <FileCode className="w-3.5 h-3.5 text-sky-400" />
+                    <span>{inoFilename}</span>
                   </button>
 
                   <button
-                    onClick={handleDownloadIno}
+                    onClick={() => setActiveCodeFile('can_defs')}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-xs font-mono font-semibold transition-all border-t border-l border-r ${
+                      activeCodeFile === 'can_defs'
+                        ? 'bg-zinc-900 text-teal-400 border-zinc-700'
+                        : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border-transparent hover:bg-zinc-900/50'
+                    }`}
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{canDefsFilename}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveCodeFile('simhub_config')}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-xs font-mono font-semibold transition-all border-t border-l border-r ${
+                      activeCodeFile === 'simhub_config'
+                        ? 'bg-zinc-900 text-amber-400 border-zinc-700'
+                        : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border-transparent hover:bg-zinc-900/50'
+                    }`}
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{simhubConfigFilename}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 pb-2">
+                  <button
+                    onClick={handleCopyCurrentCode}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-all"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Copied!' : `Copy ${getCurrentFileName()}`}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadCurrentFile}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-sky-600 hover:bg-sky-500 text-white shadow-md transition-all"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>Download .ino File</span>
+                    <span>Download {getCurrentFileName()}</span>
                   </button>
                 </div>
               </div>
 
-              <pre className="p-4 bg-zinc-950 font-mono text-xs text-zinc-300 overflow-x-auto max-h-[600px] select-all">
-                {sketchCode}
+              {/* Code Pre Viewer */}
+              <pre className="p-4 bg-zinc-950 font-mono text-xs text-zinc-300 overflow-x-auto max-h-[600px] select-all leading-relaxed">
+                {getCurrentFileContent()}
               </pre>
+            </div>
+
+            {/* Folder Setup Visual Guide */}
+            <div className="p-4 bg-zinc-900/70 border border-zinc-800 rounded-xl space-y-2 text-xs text-zinc-300">
+              <span className="font-bold text-zinc-200 text-xs flex items-center gap-1.5">
+                <FolderArchive className="w-4 h-4 text-sky-400" />
+                How to open these files directly in Arduino IDE:
+              </span>
+              <p className="text-zinc-400">
+                Create a folder named <code className="text-sky-300 font-mono bg-zinc-950 px-1.5 py-0.5 rounded">Aston_Martin_DB9_SimHub_Bridge</code> and place the three files inside it:
+              </p>
+              <pre className="p-3 bg-zinc-950 rounded-lg font-mono text-[11px] text-zinc-300 border border-zinc-800/80">
+{`Aston_Martin_DB9_SimHub_Bridge/
+├── Aston_Martin_DB9_SimHub_Bridge.ino   (Main sketch)
+├── Aston_Martin_DB9_CAN_Defs.h          (Volvo PAG CAN Definitions)
+└── Aston_Martin_DB9_SimHub_Config.h     (SimHub Protocol & Configuration)`}
+              </pre>
+              <p className="text-zinc-400 text-[11px]">
+                When you double-click <code className="text-sky-300 font-mono">Aston_Martin_DB9_SimHub_Bridge.ino</code>, Arduino IDE will open and automatically load both <code className="text-teal-300 font-mono">.h</code> header files as tabs alongside the sketch!
+              </p>
             </div>
           </div>
         )}
