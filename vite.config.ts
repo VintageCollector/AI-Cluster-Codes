@@ -1,3 +1,7 @@
+/**
+ * Aston Martin DB9 (Volvo PAG Platform) CAN Bridge
+ * Vite Configuration & Build Pipeline
+ */
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
