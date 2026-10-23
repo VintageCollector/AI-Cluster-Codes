@@ -16,5 +16,12 @@ Enabled for BeamNG, ETS2, ATS and original Assetto Corsa only:
 3. Gear is Drive or first Drive/Sport: D, D1, S1, A1 or numeric 1.
 4. ESC/DSC is explicitly confirmed off.
 
+## LCD button wiring
+Use four normally-open momentary buttons, matching the user's original test sketch:
+Function	Mega digital pin	Other button terminal
+Up	D6	Mega GND
+Down	D4	Mega GND
+OK / Enter	D5	Mega GND
+Back / Return	D7	Mega GND
 
 
